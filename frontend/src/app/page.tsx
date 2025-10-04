@@ -111,7 +111,7 @@ export default function Home() {
               Let my AI assistant handle that.
             </p>
             <p className="text-base text-slate-600 max-w-2xl mx-auto italic">
-              "I build production-ready AI solutions that scale. Numbers don't lie: 65% faster processing, 100+ clients served, 99.9% uptime."
+              "I build production-ready AI solutions that scale. From RAG systems to multi-tenant platforms, I turn AI concepts into real business impact."
             </p>
           </div>
 
@@ -139,16 +139,16 @@ export default function Home() {
           {/* Stats */}
           <div className="mt-12 grid grid-cols-3 gap-4 max-w-2xl mx-auto animate-fade-in-up" style={{animationDelay: '1.4s'}}>
             <div className="bg-white rounded-lg p-4 shadow-md border border-slate-200">
-              <div className="text-3xl font-bold text-blue-900">65%</div>
-              <div className="text-xs text-slate-600 font-medium">Faster Reviews</div>
+              <div className="text-3xl font-bold text-blue-900">2+</div>
+              <div className="text-xs text-slate-600 font-medium">Years AI Engineering</div>
             </div>
             <div className="bg-white rounded-lg p-4 shadow-md border border-slate-200">
-              <div className="text-3xl font-bold text-blue-900">100+</div>
-              <div className="text-xs text-slate-600 font-medium">Clients Scaled</div>
+              <div className="text-3xl font-bold text-blue-900">8+</div>
+              <div className="text-xs text-slate-600 font-medium">Production Systems</div>
             </div>
             <div className="bg-white rounded-lg p-4 shadow-md border border-slate-200">
-              <div className="text-3xl font-bold text-blue-900">99.9%</div>
-              <div className="text-xs text-slate-600 font-medium">Uptime</div>
+              <div className="text-3xl font-bold text-blue-900">15+</div>
+              <div className="text-xs text-slate-600 font-medium">Technologies</div>
             </div>
           </div>
         </div>
