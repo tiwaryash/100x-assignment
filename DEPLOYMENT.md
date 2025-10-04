@@ -1,250 +1,363 @@
-# Deployment Guide
+# 🚀 Deployment Guide
 
-This guide covers deploying the Interview Voice Bot to production.
+This guide covers deploying the Interview Voice Bot to production using Vercel (frontend) and Railway (backend).
 
-## Frontend Deployment (Vercel)
+## Prerequisites
 
-Vercel is the recommended platform for deploying Next.js applications.
+- GitHub account
+- Vercel account (free at [vercel.com](https://vercel.com))
+- Railway account (free at [railway.app](https://railway.app))
+- Groq API key ([console.groq.com](https://console.groq.com))
 
-### Steps
+## 📦 Pre-Deployment Checklist
 
-1. Install Vercel CLI:
+- [ ] Code pushed to GitHub
+- [ ] Groq API key ready
+- [ ] All environment variables documented
+- [ ] Local testing completed
+- [ ] No sensitive data in code
+
+## 🎨 Frontend Deployment (Vercel)
+
+### Option 1: Vercel Dashboard (Recommended)
+
+1. **Connect GitHub Repository**
+   - Go to [vercel.com/new](https://vercel.com/new)
+   - Click "Import Project"
+   - Select your GitHub repository
+   - Choose the `frontend` directory as root
+
+2. **Configure Project**
+   ```
+   Framework Preset: Next.js
+   Root Directory: frontend
+   Build Command: npm run build
+   Output Directory: .next
+   Install Command: npm install
+   ```
+
+3. **Add Environment Variables**
+   - Click "Environment Variables"
+   - Add `NEXT_PUBLIC_API_URL` = (leave empty for now)
+   - Click "Deploy"
+
+4. **Update Backend URL**
+   - After backend is deployed, return to Vercel
+   - Go to Settings → Environment Variables
+   - Update `NEXT_PUBLIC_API_URL` with your Railway backend URL
+   - Example: `https://your-app.railway.app`
+   - Redeploy: Deployments → Three dots → Redeploy
+
+### Option 2: Vercel CLI
+
 ```bash
+# Install Vercel CLI
 npm install -g vercel
-```
 
-2. Navigate to frontend directory:
-```bash
+# Navigate to frontend
 cd frontend
-```
 
-3. Deploy to Vercel:
-```bash
+# Deploy
+vercel
+
+# For production
 vercel --prod
 ```
 
-4. Follow the prompts:
-   - Set up and deploy: Yes
-   - Which scope: Select your account
-   - Link to existing project: No
-   - Project name: interview-voice-bot
-   - Directory: ./
-   - Override settings: No
+Follow prompts and add environment variables when asked.
 
-5. Update the API URL in `src/components/VoiceBot.tsx` to point to your backend URL
+### Vercel Configuration
 
-### Environment Configuration
-
-After deployment, update the backend URL:
-- Go to Vercel dashboard
-- Select your project
-- Go to Settings > Environment Variables
-- Add `NEXT_PUBLIC_API_URL` with your backend URL
-
-## Backend Deployment (Railway)
-
-Railway offers easy deployment for Python applications with environment variable management.
-
-### Steps
-
-1. Install Railway CLI:
-```bash
-npm install -g @railway/cli
+The `frontend/vercel.json` file is already configured:
+```json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["bom1"]
+}
 ```
 
-2. Navigate to backend directory:
-```bash
-cd backend
-```
+## 🐍 Backend Deployment (Railway)
 
-3. Initialize Railway:
-```bash
-railway login
-railway init
-```
+### Step-by-Step Deployment
 
-4. Deploy:
-```bash
-railway up
-```
+1. **Create Railway Project**
+   - Go to [railway.app](https://railway.app)
+   - Click "New Project"
+   - Select "Deploy from GitHub repo"
+   - Choose your repository
 
-5. Set environment variables:
-```bash
-railway variables set GROQ_API_KEY=your_api_key_here
-```
+2. **Configure Service**
+   - Railway will auto-detect Python
+   - Set **Root Directory**: `backend`
+   - Railway automatically uses `requirements.txt`
 
-6. Get your deployment URL:
-```bash
-railway domain
+3. **Add Environment Variables**
+   - Click your service
+   - Go to "Variables" tab
+   - Add:
+     ```
+     GROQ_API_KEY=your_actual_groq_api_key_here
+     PORT=8000
+     ```
+
+4. **Configure Start Command**
+   - Go to "Settings" tab
+   - Under "Start Command", add:
+     ```
+     uvicorn main:app --host 0.0.0.0 --port $PORT
+     ```
+
+5. **Deploy**
+   - Railway will auto-deploy
+   - Wait for deployment to complete
+   - Copy your public URL (e.g., `your-app.railway.app`)
+
+6. **Enable Public Networking**
+   - Go to "Settings" → "Networking"
+   - Click "Generate Domain"
+   - Copy the public URL
+
+### Railway Configuration
+
+The `backend/railway.json` file is already configured:
+```json
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "uvicorn main:app --host 0.0.0.0 --port $PORT",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
 ```
 
 ### Alternative: Render
 
-1. Create a `render.yaml` in the backend directory:
-```yaml
-services:
-  - type: web
-    name: interview-bot-api
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: GROQ_API_KEY
-        sync: false
-```
+If you prefer Render over Railway:
 
-2. Connect your GitHub repository to Render
-3. Add environment variables in Render dashboard
-4. Deploy
+1. Go to [render.com](https://render.com)
+2. Create new "Web Service"
+3. Connect GitHub repository
+4. Configure:
+   ```
+   Name: interview-bot-backend
+   Region: Singapore (or closest to you)
+   Branch: main
+   Root Directory: backend
+   Runtime: Python 3
+   Build Command: pip install -r requirements.txt
+   Start Command: uvicorn main:app --host 0.0.0.0 --port $PORT
+   ```
+5. Add environment variable: `GROQ_API_KEY`
+6. Deploy
 
-## Docker Deployment
+## 🔗 Connect Frontend and Backend
 
-### Backend Dockerfile
+### Update CORS in Backend
 
-Create `backend/Dockerfile`:
-```dockerfile
-FROM python:3.11-slim
+If you get CORS errors, update `backend/main.py`:
 
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### Frontend Dockerfile
-
-Create `frontend/Dockerfile`:
-```dockerfile
-FROM node:18-alpine AS builder
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-
-FROM node:18-alpine
-
-WORKDIR /app
-
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/public ./public
-
-CMD ["npm", "start"]
-```
-
-### Docker Compose
-
-Create `docker-compose.yml`:
-```yaml
-version: '3.8'
-
-services:
-  backend:
-    build: ./backend
-    ports:
-      - "8000:8000"
-    environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
-    
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-    environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
-```
-
-## Production Checklist
-
-### Backend
-- [ ] Set GROQ_API_KEY environment variable
-- [ ] Update CORS origins to include production domain
-- [ ] Enable HTTPS
-- [ ] Set up logging and monitoring
-- [ ] Configure rate limiting
-- [ ] Set up error tracking (e.g., Sentry)
-
-### Frontend
-- [ ] Update API URL to production backend
-- [ ] Enable production optimizations
-- [ ] Configure CSP headers
-- [ ] Set up analytics (optional)
-- [ ] Test on target browsers
-- [ ] Verify HTTPS is enabled
-
-## Monitoring
-
-### Backend Health Check
-```bash
-curl https://your-api-domain.com/health
-```
-
-Expected response:
-```json
-{
-  "status": "healthy"
-}
-```
-
-### Frontend Verification
-- Test microphone permissions
-- Verify speech recognition works
-- Test voice synthesis
-- Check API connectivity
-
-## Troubleshooting
-
-### CORS Issues
-Update `backend/main.py`:
 ```python
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://your-frontend-domain.com"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://your-frontend.vercel.app",  # Add your Vercel URL
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 ```
 
-### Speech API Not Working
-- Ensure site is served over HTTPS
-- Check browser compatibility
-- Verify microphone permissions
+Push changes and Railway will auto-redeploy.
 
-### API Connection Timeout
-- Check backend is running and accessible
-- Verify firewall rules
-- Check environment variables are set correctly
+### Update Frontend Environment Variable
 
-## Cost Estimation
+1. Go to Vercel dashboard
+2. Select your project
+3. Settings → Environment Variables
+4. Edit `NEXT_PUBLIC_API_URL`:
+   ```
+   https://your-backend.railway.app
+   ```
+5. Redeploy from Deployments tab
 
-### Groq API
-- Free tier: 14,400 requests per day
-- Cost per additional request: Check current pricing
+## 🧪 Testing Deployment
 
-### Hosting
-- Vercel (Frontend): Free tier available
-- Railway (Backend): $5/month starter plan
-- Alternative free options: Render, Fly.io
+### Test Backend
 
-## Scaling Considerations
+```bash
+# Health check
+curl https://your-backend.railway.app/health
 
-For production at scale:
-1. Implement request caching
-2. Add rate limiting per user
-3. Use CDN for frontend assets
-4. Implement session management
-5. Add database for conversation history
-6. Set up horizontal scaling for backend
+# Test chat endpoint
+curl -X POST https://your-backend.railway.app/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello"}]}'
+```
 
+### Test Frontend
+
+1. Open your Vercel URL
+2. Click "Start Voice Interview"
+3. Try voice input or text input
+4. Test quick action buttons
+5. Check browser console for errors
+
+## 🔒 Security Best Practices
+
+### Backend
+- ✅ Never commit `.env` file
+- ✅ Use environment variables for API keys
+- ✅ Enable CORS only for specific domains
+- ✅ Use HTTPS in production
+- ✅ Monitor Railway logs for errors
+
+### Frontend
+- ✅ Never expose backend API keys
+- ✅ Use `NEXT_PUBLIC_` prefix only for client-side variables
+- ✅ Validate user inputs
+- ✅ Monitor Vercel deployment logs
+
+## 📊 Monitoring and Logs
+
+### Railway Logs
+
+```bash
+# View logs in dashboard
+Railway Dashboard → Your Service → "Logs" tab
+
+# Or use Railway CLI
+railway logs
+```
+
+### Vercel Logs
+
+```bash
+# View in dashboard
+Vercel Dashboard → Your Project → "Logs" tab
+
+# Or use Vercel CLI
+vercel logs
+```
+
+## 🐛 Troubleshooting
+
+### Issue: "Failed to fetch" error
+
+**Solution**: Check CORS settings and ensure backend URL is correct
+
+```javascript
+// In VoiceBot.tsx
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+console.log('API URL:', API_URL) // Debug
+```
+
+### Issue: "GROQ_API_KEY not found"
+
+**Solution**: Add environment variable in Railway dashboard
+
+### Issue: Build fails on Vercel
+
+**Solution**: Check Node.js version in `package.json`:
+```json
+"engines": {
+  "node": ">=18.0.0"
+}
+```
+
+### Issue: Backend timeout
+
+**Solution**: Railway free tier has timeouts. Upgrade or use Render.
+
+### Issue: Voice not working
+
+**Solution**: HTTPS required for Web Speech API. Local dev uses HTTP, production needs HTTPS (Vercel provides this automatically).
+
+## 💰 Cost Estimation
+
+### Free Tier Limits
+
+**Vercel Free Tier:**
+- 100 GB bandwidth/month
+- Unlimited deployments
+- ✅ Perfect for this project
+
+**Railway Free Trial:**
+- $5 credit/month
+- ~500 hours runtime
+- ✅ Sufficient for demo
+
+**Groq API:**
+- Free tier: 30 requests/minute
+- ✅ Great for interviews
+
+**Total Monthly Cost: $0** (within free tiers)
+
+## 🚀 Going Live
+
+### Final Checklist
+
+- [ ] Backend deployed and healthy
+- [ ] Frontend deployed and accessible
+- [ ] Environment variables configured
+- [ ] CORS configured correctly
+- [ ] Test voice recognition
+- [ ] Test all quick actions
+- [ ] Test resume download
+- [ ] Check mobile responsiveness
+- [ ] Review logs for errors
+- [ ] Share URL for testing
+
+### Submission URL
+
+Your final submission URL will be:
+```
+https://your-project-name.vercel.app
+```
+
+## 📈 Post-Deployment
+
+### Monitor Performance
+
+1. **Vercel Analytics** (optional)
+   - Enable in Vercel dashboard
+   - Track page views and performance
+
+2. **Railway Metrics**
+   - Monitor memory and CPU usage
+   - Check response times
+
+### Update Code
+
+```bash
+# Make changes
+git add .
+git commit -m "Your changes"
+git push
+
+# Both Vercel and Railway auto-deploy on push to main branch
+```
+
+## 🆘 Support
+
+If you encounter issues:
+
+1. Check logs (Vercel + Railway dashboards)
+2. Review environment variables
+3. Test API endpoints directly
+4. Check browser console for frontend errors
+5. Verify CORS configuration
+
+---
+
+**Deployment Complete!** 🎉
+
+Your AI Voice Interview Bot is now live and ready to impress the 100x team!

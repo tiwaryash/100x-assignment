@@ -143,7 +143,7 @@ export default function Home() {
               <div className="text-xs text-slate-600 font-medium">Years AI Engineering</div>
             </div>
             <div className="bg-white rounded-lg p-4 shadow-md border border-slate-200">
-              <div className="text-3xl font-bold text-blue-900">8+</div>
+              <div className="text-3xl font-bold text-blue-900">12+</div>
               <div className="text-xs text-slate-600 font-medium">Production Systems</div>
             </div>
             <div className="bg-white rounded-lg p-4 shadow-md border border-slate-200">
