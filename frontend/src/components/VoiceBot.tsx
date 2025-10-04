@@ -26,7 +26,7 @@ const VoiceBot: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Get API URL from environment variable or use default
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+  const API_URL = process.env.NEXT_PUBLIC_API_URL
 
   const projects = [
     {
