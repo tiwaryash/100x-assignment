@@ -1,11 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict
 import os
 import logging
 from groq import Groq
+from elevenlabs import ElevenLabs
 from dotenv import load_dotenv
+import io
 
 load_dotenv()
 
@@ -38,6 +41,15 @@ else:
 
 groq_client = Groq(api_key=groq_api_key)
 
+# Initialize ElevenLabs client
+elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
+if not elevenlabs_api_key:
+    logger.error("ELEVENLABS_API_KEY not found in environment variables!")
+else:
+    logger.info("ElevenLabs API key loaded successfully")
+
+elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
+
 # System prompt with personal information and strategic interview answers
 SYSTEM_PROMPT = """You are Yash Tiwary, a passionate Software Engineer being interviewed for an AI Agent Team position at 100x. 
 Answer questions authentically and professionally based on your real profile. Use the strategic answers below as guidance.
@@ -46,7 +58,7 @@ Answer questions authentically and professionally based on your real profile. Us
 When asked about your life story, say:
 "I'm a software engineer who's always been fascinated by how we can make technology understand and interact with human language. 
 This curiosity led me from my computer science degree at NIIT University straight into the world of AI, where I now build intelligent 
-systems at Thoucentric using technologies like RAG, Cohere, and LangChain to solve complex business problems. I'm driven by the 
+systems at Thou centric using technologies like RAG, Cohere, and LangChain to solve complex business problems. I'm driven by the 
 challenge of bridging the gap between raw data and actionable insights, and I spend my time learning and building projects—like 
 my own HTTP server in Rust—to better understand how to create robust, scalable AI applications."
 
@@ -78,7 +90,7 @@ area of expertise; on my Nexus Mind project, I set a goal to achieve 95% accurac
 from tackling difficult challenges, whether it's learning a new domain or perfecting my craft."
 
 === KEY ACHIEVEMENTS & TECHNICAL BACKGROUND ===
-- Software Engineer at Thoucentric (Xoriant Company), Bengaluru since January 2024
+- Software Engineer at Thou centric (Xoriant Company), Bengaluru since January 2024
 - B.Tech Computer Science from NIIT University (2024)
 - Built Intelligent Contract Management Platform: 65% faster reviews, 92% accuracy using Cohere AI & RAG
 - Built Procurement Optimization Platform: 30% reduction in stock-outs, 25% higher satisfaction
@@ -111,6 +123,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
 
+class TTSRequest(BaseModel):
+    text: str
+
 @app.get("/")
 async def root():
     return {"status": "healthy", "message": "Interview Voice Bot API"}
@@ -119,7 +134,7 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat")
 async def chat(request: ChatRequest):
     try:
         logger.info(f"Received chat request with {len(request.messages)} messages")
@@ -128,26 +143,81 @@ async def chat(request: ChatRequest):
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages.extend([{"role": msg.role, "content": msg.content} for msg in request.messages])
         
-        logger.info("Calling Groq API...")
+        logger.info("Calling Groq API with streaming...")
         
-        # Call Groq API
-        completion = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=500,
+        async def generate_stream():
+            full_response = ""
+            
+            # Call Groq API with streaming
+            stream = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=500,
+                stream=True
+            )
+            
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    # Send each chunk as JSON
+                    yield f"data: {content}\n\n"
+            
+            logger.info("Successfully streamed response from Groq")
+            yield "data: [DONE]\n\n"
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            }
         )
-        
-        response_text = completion.choices[0].message.content
-        logger.info("Successfully received response from Groq")
-        
-        return ChatResponse(response=response_text)
     
     except Exception as e:
         logger.error(f"Error in chat endpoint: {type(e).__name__}: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
+@app.post("/tts")
+async def text_to_speech(request: TTSRequest):
+    try:
+        logger.info(f"Received TTS request for text: {request.text[:50]}...")
+        
+        # Generate audio using ElevenLabs
+        # Using Antoni voice (professional, clear male voice)
+        # You can change the voice_id to any of ElevenLabs' voices
+        audio_generator = elevenlabs_client.text_to_speech.convert(
+            text=request.text,
+            voice_id="ErXwobaYiN019PkySvjV",  # Antoni voice ID (male)
+            model_id="eleven_multilingual_v2",  # High-quality model
+        )
+        
+        # Collect audio chunks
+        audio_data = b""
+        for chunk in audio_generator:
+            if chunk:
+                audio_data += chunk
+        
+        logger.info("Successfully generated audio with ElevenLabs")
+        
+        # Return audio as streaming response
+        return StreamingResponse(
+            io.BytesIO(audio_data),
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": "inline; filename=speech.mp3"
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"Error in TTS endpoint: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error processing TTS request: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

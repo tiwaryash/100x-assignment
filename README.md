@@ -10,7 +10,7 @@ An intelligent voice-powered interview bot built for the 100x AI Agent Team posi
 
 ### Core Functionality
 - 🎤 **Voice Recognition** - Real-time speech-to-text using Web Speech API
-- 🔊 **Text-to-Speech** - Natural voice responses with speech synthesis
+- 🔊 **Premium Text-to-Speech** - High-quality natural voice using ElevenLabs API
 - 🤖 **AI-Powered Responses** - Strategic answers using Groq's Llama 3.3 70B model
 - 💬 **Interactive Chat** - Smooth conversational interface with typing indicators
 
@@ -45,6 +45,7 @@ An intelligent voice-powered interview bot built for the 100x AI Agent Team posi
 - Python 3.13+
 - Node.js 18+
 - Groq API Key (free at [console.groq.com](https://console.groq.com))
+- ElevenLabs API Key (free tier at [elevenlabs.io](https://elevenlabs.io))
 
 ### One-Command Setup
 
@@ -84,6 +85,7 @@ pip install -r requirements.txt
 
 # Create .env file
 echo "GROQ_API_KEY=your_groq_api_key_here" > .env
+echo "ELEVENLABS_API_KEY=your_elevenlabs_api_key_here" >> .env
 ```
 
 #### Frontend Setup
@@ -187,6 +189,7 @@ The bot is programmed with strategic, STAR-method answers for:
 ### Backend (.env)
 ```bash
 GROQ_API_KEY=your_groq_api_key_here
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 ```
 
 ### Frontend (.env.local)
@@ -211,7 +214,9 @@ vercel --prod
 **Backend (Railway):**
 1. Push to GitHub
 2. Connect repository to Railway
-3. Add `GROQ_API_KEY` environment variable
+3. Add environment variables:
+   - `GROQ_API_KEY`
+   - `ELEVENLABS_API_KEY`
 4. Railway auto-deploys
 
 ## 🧪 Testing

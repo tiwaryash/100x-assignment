@@ -101,6 +101,7 @@ The `frontend/vercel.json` file is already configured:
    - Add:
      ```
      GROQ_API_KEY=your_actual_groq_api_key_here
+     ELEVENLABS_API_KEY=your_actual_elevenlabs_api_key_here
      PORT=8000
      ```
 
@@ -154,7 +155,9 @@ If you prefer Render over Railway:
    Build Command: pip install -r requirements.txt
    Start Command: uvicorn main:app --host 0.0.0.0 --port $PORT
    ```
-5. Add environment variable: `GROQ_API_KEY`
+5. Add environment variables:
+   - `GROQ_API_KEY`
+   - `ELEVENLABS_API_KEY`
 6. Deploy
 
 ## 🔗 Connect Frontend and Backend
@@ -260,9 +263,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 console.log('API URL:', API_URL) // Debug
 ```
 
-### Issue: "GROQ_API_KEY not found"
+### Issue: "GROQ_API_KEY not found" or "ELEVENLABS_API_KEY not found"
 
-**Solution**: Add environment variable in Railway dashboard
+**Solution**: Add environment variables in Railway dashboard (both GROQ_API_KEY and ELEVENLABS_API_KEY)
 
 ### Issue: Build fails on Vercel
 

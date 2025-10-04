@@ -20,9 +20,11 @@ const VoiceBot: React.FC = () => {
   const [useTextInput, setUseTextInput] = useState(false)
   const [showQuickActions, setShowQuickActions] = useState(true)
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([])
+  const [processingStatus, setProcessingStatus] = useState<'thinking' | 'generating_voice' | ''>('')
+  const [isPaused, setIsPaused] = useState(false)
   
   const recognitionRef = useRef<any>(null)
-  const synthRef = useRef<SpeechSynthesis | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Get API URL from environment variable or use default
@@ -60,9 +62,11 @@ const VoiceBot: React.FC = () => {
   ]
 
   useEffect(() => {
-    // Initialize speech synthesis
+    // Initialize audio element
     if (typeof window !== 'undefined') {
-      synthRef.current = window.speechSynthesis
+      audioRef.current = new Audio()
+      audioRef.current.onended = () => setIsSpeaking(false)
+      audioRef.current.onerror = () => setIsSpeaking(false)
     }
 
     // Initialize speech recognition
@@ -130,8 +134,9 @@ const VoiceBot: React.FC = () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop()
       }
-      if (synthRef.current) {
-        synthRef.current.cancel()
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
       }
     }
   }, [])
@@ -220,27 +225,89 @@ const VoiceBot: React.FC = () => {
     setMessages(prev => [...prev, userMessage])
     setTranscript('')
     setIsProcessing(true)
+    setProcessingStatus('thinking')
 
     try {
-      const response = await axios.post(`${API_URL}/chat`, {
-        messages: [...messages, userMessage],
+      // Step 1: Get AI response (show "Thinking...")
+      const response = await fetch(`${API_URL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMessage],
+        }),
       })
 
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: response.data.response,
+      if (!response.ok) {
+        throw new Error('Failed to get response from server')
       }
 
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let fullResponse = ''
+
+      // Collect full response (don't show yet)
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n')
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              if (data !== '[DONE]') {
+                fullResponse += data
+              }
+            }
+          }
+        }
+      }
+
+      // Add 2-3 second delay before generating voice for better UX
+      await new Promise(resolve => setTimeout(resolve, 2500))
+
+      // Step 2: Generate voice (show "Generating voice...")
+      setProcessingStatus('generating_voice')
+      const audioResponse = await axios.post(
+        `${API_URL}/tts`,
+        { text: fullResponse },
+        { responseType: 'blob' }
+      )
+
+      // Step 3: Display text and play audio together
+      setProcessingStatus('')
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: fullResponse
+      }
       setMessages(prev => [...prev, assistantMessage])
-      speakText(response.data.response)
+      setIsProcessing(false)
+
+      // Play audio
+      const audioBlob = new Blob([audioResponse.data], { type: 'audio/mpeg' })
+      const audioUrl = URL.createObjectURL(audioBlob)
       
-      // Generate contextual suggestions
-      setSuggestedQuestions(generateSuggestions(response.data.response))
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl
+        setIsSpeaking(true)
+        await audioRef.current.play()
+        
+        audioRef.current.onended = () => {
+          setIsSpeaking(false)
+          URL.revokeObjectURL(audioUrl)
+        }
+      }
+
+      setSuggestedQuestions(generateSuggestions(fullResponse))
     } catch (error) {
       console.error('Error sending message:', error)
       setError('Failed to get response from server. Please ensure the backend is running.')
-    } finally {
       setIsProcessing(false)
+      setProcessingStatus('')
     }
   }
 
@@ -295,26 +362,56 @@ const VoiceBot: React.FC = () => {
     }
   }
 
-  const speakText = (text: string) => {
-    if (synthRef.current) {
-      synthRef.current.cancel()
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = 'en-US'
-      utterance.rate = 1.0
-      utterance.pitch = 1.0
+  const speakText = async (text: string) => {
+    try {
+      // Stop any currently playing audio
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
+      }
 
-      utterance.onstart = () => setIsSpeaking(true)
-      utterance.onend = () => setIsSpeaking(false)
-      utterance.onerror = () => setIsSpeaking(false)
+      setIsSpeaking(true)
 
-      synthRef.current.speak(utterance)
+      // Create object URL from blob and play
+      const audioBlob = new Blob([new Uint8Array()], { type: 'audio/mpeg' })
+      const audioUrl = URL.createObjectURL(audioBlob)
+      
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl
+        await audioRef.current.play()
+        
+        // Clean up object URL after playing
+        audioRef.current.onended = () => {
+          setIsSpeaking(false)
+          URL.revokeObjectURL(audioUrl)
+        }
+      }
+    } catch (error) {
+      console.error('Error playing speech:', error)
+      setIsSpeaking(false)
+    }
+  }
+
+  const pauseSpeaking = () => {
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause()
+      setIsPaused(true)
+    }
+  }
+
+  const resumeSpeaking = () => {
+    if (audioRef.current && audioRef.current.paused) {
+      audioRef.current.play()
+      setIsPaused(false)
     }
   }
 
   const stopSpeaking = () => {
-    if (synthRef.current) {
-      synthRef.current.cancel()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
       setIsSpeaking(false)
+      setIsPaused(false)
     }
   }
 
@@ -324,6 +421,7 @@ const VoiceBot: React.FC = () => {
     setError(null)
     setSuggestedQuestions([])
     setShowQuickActions(true)
+    setIsPaused(false)
     stopSpeaking()
   }
 
@@ -441,7 +539,7 @@ const VoiceBot: React.FC = () => {
                 )}
               </div>
             ))}
-            {isProcessing && (
+            {isProcessing && messages[messages.length - 1]?.role !== 'assistant' && (
               <div className="flex gap-3 justify-start animate-fade-in-up">
                 <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden border-2 border-blue-200 shadow-lg relative">
                   <Image 
@@ -460,7 +558,9 @@ const VoiceBot: React.FC = () => {
                       <div className="w-2 h-2 bg-blue-800 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
                       <div className="w-2 h-2 bg-blue-700 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                     </div>
-                    <span className="text-sm text-slate-600">Thinking...</span>
+                    <span className="text-sm text-slate-600" id="processing-status">
+                      {processingStatus === 'thinking' ? 'Thinking...' : 'Generating voice...'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -550,11 +650,39 @@ const VoiceBot: React.FC = () => {
             </button>
           </div>
 
+          {/* Pause/Resume Button */}
+          {isSpeaking && (
+            <button
+              onClick={isPaused ? resumeSpeaking : pauseSpeaking}
+              className="p-4 rounded-full bg-yellow-600 hover:bg-yellow-700 transition-all transform hover:scale-110 focus:outline-none focus:ring-4 focus:ring-yellow-300 shadow-lg"
+              title={isPaused ? 'Resume' : 'Pause'}
+            >
+              {isPaused ? (
+                <svg
+                  className="w-5 h-5 text-white"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              ) : (
+                <svg
+                  className="w-5 h-5 text-white"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                </svg>
+              )}
+            </button>
+          )}
+
           {/* Stop Speaking Button */}
           {isSpeaking && (
             <button
               onClick={stopSpeaking}
               className="p-4 rounded-full bg-orange-600 hover:bg-orange-700 transition-all transform hover:scale-110 focus:outline-none focus:ring-4 focus:ring-orange-300 shadow-lg"
+              title="Stop"
             >
               <svg
                 className="w-5 h-5 text-white"
@@ -611,14 +739,9 @@ const VoiceBot: React.FC = () => {
                   <div className="w-1 h-3 bg-blue-800 rounded-full animate-wave" style={{animationDelay: '0.1s'}}></div>
                   <div className="w-1 h-3 bg-blue-700 rounded-full animate-wave" style={{animationDelay: '0.2s'}}></div>
                 </div>
-                <p className="text-sm font-medium text-slate-700">Speaking...</p>
-              </>
-            ) : isProcessing ? (
-              <>
-                <svg className="w-4 h-4 text-blue-900 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <p className="text-sm font-medium text-slate-700">Processing...</p>
+                <p className="text-sm font-medium text-slate-700">
+                  {isPaused ? 'Paused' : 'Speaking...'}
+                </p>
               </>
             ) : (
               <>

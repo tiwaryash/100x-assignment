@@ -5,7 +5,8 @@ FastAPI backend service for the interview voice bot application.
 ## Features
 
 - RESTful API endpoints for chat functionality
-- Integration with Groq LLM API (free tier)
+- Integration with Groq LLM API for natural language responses
+- Integration with ElevenLabs API for high-quality text-to-speech
 - CORS-enabled for frontend communication
 - Environment-based configuration
 
@@ -16,11 +17,16 @@ FastAPI backend service for the interview voice bot application.
 pip install -r requirements.txt
 ```
 
-2. Create `.env` file with your Groq API key:
+2. Create `.env` file with your API keys:
 ```bash
-cp .env.example .env
-# Edit .env and add your GROQ_API_KEY
+# Create .env file with:
+GROQ_API_KEY=your_groq_api_key_here
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 ```
+
+**Getting API Keys:**
+- Groq API: Sign up at https://console.groq.com/ (free tier available)
+- ElevenLabs API: Sign up at https://elevenlabs.io/ (free tier includes 10,000 characters/month)
 
 3. Run the server:
 ```bash
@@ -33,7 +39,8 @@ The API will be available at `http://localhost:8000`
 
 - `GET /` - Root endpoint with status
 - `GET /health` - Health check endpoint
-- `POST /chat` - Chat endpoint for conversation
+- `POST /chat` - Chat endpoint for conversation with AI
+- `POST /tts` - Text-to-speech endpoint using ElevenLabs (returns audio/mpeg)
 
 ## API Documentation
 
