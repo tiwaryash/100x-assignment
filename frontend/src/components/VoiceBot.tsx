@@ -20,6 +20,9 @@ const VoiceBot: React.FC = () => {
   const synthRef = useRef<SpeechSynthesis | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Get API URL from environment variable or use default
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
   useEffect(() => {
     // Initialize speech synthesis
     if (typeof window !== 'undefined') {
@@ -110,7 +113,7 @@ const VoiceBot: React.FC = () => {
     setIsProcessing(true)
 
     try {
-      const response = await axios.post('http://localhost:8000/chat', {
+      const response = await axios.post(`${API_URL}/chat`, {
         messages: [...messages, userMessage],
       })
 
