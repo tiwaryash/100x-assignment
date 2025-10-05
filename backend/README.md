@@ -6,7 +6,7 @@ FastAPI backend service for the interview voice bot application.
 
 - RESTful API endpoints for chat functionality
 - Integration with Groq LLM API for natural language responses
-- Integration with ElevenLabs API for high-quality text-to-speech
+- Integration with Hume AI API for empathic, natural text-to-speech
 - CORS-enabled for frontend communication
 - Environment-based configuration
 
@@ -21,12 +21,14 @@ pip install -r requirements.txt
 ```bash
 # Create .env file with:
 GROQ_API_KEY=your_groq_api_key_here
-ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+HUME_API_KEY=your_hume_api_key_here
+HUME_API_KEY_BACKUP=your_backup_hume_api_key_here  # Optional: fallback when primary hits 10k character limit
 ```
 
 **Getting API Keys:**
 - Groq API: Sign up at https://console.groq.com/ (free tier available)
-- ElevenLabs API: Sign up at https://elevenlabs.io/ (free tier includes 10,000 characters/month)
+- Hume AI API: Sign up at https://platform.hume.ai/ (free tier: 10,000 characters)
+- **Note**: Hume AI free tier has a 10,000 character limit. Configure `HUME_API_KEY_BACKUP` for automatic failover
 
 3. Run the server:
 ```bash
@@ -40,7 +42,7 @@ The API will be available at `http://localhost:8000`
 - `GET /` - Root endpoint with status
 - `GET /health` - Health check endpoint
 - `POST /chat` - Chat endpoint for conversation with AI
-- `POST /tts` - Text-to-speech endpoint using ElevenLabs (returns audio/mpeg)
+- `POST /tts` - Text-to-speech endpoint using Hume AI (returns audio/mpeg)
 
 ## API Documentation
 

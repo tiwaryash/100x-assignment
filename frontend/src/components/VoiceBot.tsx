@@ -136,6 +136,10 @@ const VoiceBot: React.FC = () => {
       }
       if (audioRef.current) {
         audioRef.current.pause()
+        // Clean up blob URL if exists
+        if (audioRef.current.src && audioRef.current.src.startsWith('blob:')) {
+          URL.revokeObjectURL(audioRef.current.src)
+        }
         audioRef.current.src = ''
       }
     }
@@ -275,7 +279,12 @@ const VoiceBot: React.FC = () => {
       const audioResponse = await axios.post(
         `${API_URL}/tts`,
         { text: fullResponse },
-        { responseType: 'blob' }
+        { 
+          responseType: 'blob',
+          headers: {
+            'Accept': 'audio/mpeg'
+          }
+        }
       )
 
       // Step 3: Display text and play audio together
@@ -287,18 +296,48 @@ const VoiceBot: React.FC = () => {
       setMessages(prev => [...prev, assistantMessage])
       setIsProcessing(false)
 
-      // Play audio
+      // Validate audio blob before playing
+      if (audioResponse.data.size === 0) {
+        console.error('Received empty audio blob')
+        setError('Failed to generate audio - received empty response')
+        return
+      }
+
+      // Play audio with proper blob handling
       const audioBlob = new Blob([audioResponse.data], { type: 'audio/mpeg' })
       const audioUrl = URL.createObjectURL(audioBlob)
       
       if (audioRef.current) {
+        // Clean up previous audio
+        audioRef.current.pause()
+        if (audioRef.current.src) {
+          URL.revokeObjectURL(audioRef.current.src)
+        }
+        
         audioRef.current.src = audioUrl
+        audioRef.current.load() // Explicitly load the audio
         setIsSpeaking(true)
-        await audioRef.current.play()
+        
+        try {
+          await audioRef.current.play()
+        } catch (playError) {
+          console.error('Error playing audio:', playError)
+          setError('Failed to play audio. Please try again.')
+          setIsSpeaking(false)
+          URL.revokeObjectURL(audioUrl)
+          return
+        }
         
         audioRef.current.onended = () => {
           setIsSpeaking(false)
           URL.revokeObjectURL(audioUrl)
+        }
+        
+        audioRef.current.onerror = (e) => {
+          console.error('Audio playback error:', e)
+          setIsSpeaking(false)
+          URL.revokeObjectURL(audioUrl)
+          setError('Audio playback error. The audio format may not be supported.')
         }
       }
 
@@ -367,6 +406,10 @@ const VoiceBot: React.FC = () => {
       // Stop any currently playing audio
       if (audioRef.current) {
         audioRef.current.pause()
+        // Clean up previous blob URL
+        if (audioRef.current.src && audioRef.current.src.startsWith('blob:')) {
+          URL.revokeObjectURL(audioRef.current.src)
+        }
         audioRef.current.src = ''
       }
 
@@ -378,10 +421,16 @@ const VoiceBot: React.FC = () => {
       
       if (audioRef.current) {
         audioRef.current.src = audioUrl
+        audioRef.current.load()
         await audioRef.current.play()
         
         // Clean up object URL after playing
         audioRef.current.onended = () => {
+          setIsSpeaking(false)
+          URL.revokeObjectURL(audioUrl)
+        }
+        
+        audioRef.current.onerror = () => {
           setIsSpeaking(false)
           URL.revokeObjectURL(audioUrl)
         }
@@ -409,6 +458,10 @@ const VoiceBot: React.FC = () => {
   const stopSpeaking = () => {
     if (audioRef.current) {
       audioRef.current.pause()
+      // Clean up blob URL if exists
+      if (audioRef.current.src && audioRef.current.src.startsWith('blob:')) {
+        URL.revokeObjectURL(audioRef.current.src)
+      }
       audioRef.current.src = ''
       setIsSpeaking(false)
       setIsPaused(false)

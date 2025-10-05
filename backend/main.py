@@ -6,9 +6,11 @@ from typing import List, Dict
 import os
 import logging
 from groq import Groq
-from elevenlabs import ElevenLabs
+from hume import HumeClient
+from hume.tts.types import PostedUtterance
 from dotenv import load_dotenv
 import io
+import base64
 
 load_dotenv()
 
@@ -41,14 +43,22 @@ else:
 
 groq_client = Groq(api_key=groq_api_key)
 
-# Initialize ElevenLabs client
-elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
-if not elevenlabs_api_key:
-    logger.error("ELEVENLABS_API_KEY not found in environment variables!")
-else:
-    logger.info("ElevenLabs API key loaded successfully")
+# Initialize Hume AI client with fallback support
+hume_api_key = os.getenv("HUME_API_KEY")
+hume_api_key_backup = os.getenv("HUME_API_KEY_BACKUP")
 
-elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
+if not hume_api_key:
+    logger.error("HUME_API_KEY not found in environment variables!")
+else:
+    logger.info("Hume AI primary API key loaded successfully")
+
+if hume_api_key_backup:
+    logger.info("Hume AI backup key configured")
+else:
+    logger.warning("No backup Hume AI key found. Set HUME_API_KEY_BACKUP in .env for failover support")
+
+hume_client = HumeClient(api_key=hume_api_key)
+hume_client_backup = HumeClient(api_key=hume_api_key_backup) if hume_api_key_backup else None
 
 # System prompt with personal information and strategic interview answers
 SYSTEM_PROMPT = """You are Yash Tiwary, a passionate Software Engineer being interviewed for an AI Agent Team position at 100x. 
@@ -187,29 +197,75 @@ async def text_to_speech(request: TTSRequest):
     try:
         logger.info(f"Received TTS request for text: {request.text[:50]}...")
         
-        # Generate audio using ElevenLabs
-        # Using Antoni voice (professional, clear male voice)
-        # You can change the voice_id to any of ElevenLabs' voices
-        audio_generator = elevenlabs_client.text_to_speech.convert(
-            text=request.text,
-            voice_id="ErXwobaYiN019PkySvjV",  # Antoni voice ID (male)
-            model_id="eleven_multilingual_v2",  # High-quality model
+        # Generate audio using Hume AI TTS
+        # Create utterance with the text (no voice specified = dynamic voice generation)
+        utterance = PostedUtterance(
+            text=request.text
         )
         
-        # Collect audio chunks
-        audio_data = b""
-        for chunk in audio_generator:
-            if chunk:
-                audio_data += chunk
+        # Use non-streaming method to get complete audio at once (more reliable)
+        # Try primary key first, fall back to backup if rate limited
+        audio_data = None
+        primary_failed = False
         
-        logger.info("Successfully generated audio with ElevenLabs")
+        try:
+            audio_chunks = []
+            for chunk in hume_client.tts.synthesize_file(
+                utterances=[utterance],
+            ):
+                audio_chunks.append(chunk)
+            
+            audio_data = b"".join(audio_chunks)
+            logger.info(f"Successfully generated audio with Hume AI (primary key): {len(audio_data)} bytes")
+        except Exception as e:
+            error_message = str(e).lower()
+            # Check if it's a rate limit or quota error
+            if any(keyword in error_message for keyword in ['rate', 'limit', 'quota', 'exceeded', '429', '403']):
+                logger.warning(f"Primary Hume AI key limit reached: {e}")
+                primary_failed = True
+            else:
+                logger.error(f"Error generating audio with primary key: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                raise HTTPException(status_code=500, detail=f"Error generating audio: {str(e)}")
         
-        # Return audio as streaming response
+        # Try backup key if primary failed due to rate limit
+        if primary_failed and hume_client_backup:
+            try:
+                logger.info("Attempting to use backup Hume AI key...")
+                audio_chunks = []
+                for chunk in hume_client_backup.tts.synthesize_file(
+                    utterances=[utterance],
+                ):
+                    audio_chunks.append(chunk)
+                
+                audio_data = b"".join(audio_chunks)
+                logger.info(f"Successfully generated audio with Hume AI (backup key): {len(audio_data)} bytes")
+            except Exception as e:
+                logger.error(f"Error generating audio with backup key: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                raise HTTPException(status_code=500, detail=f"Both Hume AI keys failed. Error: {str(e)}")
+        elif primary_failed and not hume_client_backup:
+            raise HTTPException(
+                status_code=503, 
+                detail="Primary Hume AI key limit reached and no backup key configured. Please set HUME_API_KEY_BACKUP in environment."
+            )
+        
+        # Check if audio data is empty
+        if len(audio_data) == 0:
+            logger.error("No audio data generated from Hume AI")
+            raise HTTPException(status_code=500, detail="No audio data generated from TTS service")
+        
+        # Return audio as streaming response with proper headers for browser playback
         return StreamingResponse(
             io.BytesIO(audio_data),
             media_type="audio/mpeg",
             headers={
-                "Content-Disposition": "inline; filename=speech.mp3"
+                "Content-Disposition": "inline; filename=speech.mp3",
+                "Content-Length": str(len(audio_data)),
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "no-cache"
             }
         )
     
