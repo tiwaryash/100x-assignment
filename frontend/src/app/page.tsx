@@ -139,7 +139,7 @@ export default function Home() {
           {/* Stats */}
           <div className="mt-12 grid grid-cols-3 gap-4 max-w-2xl mx-auto animate-fade-in-up" style={{animationDelay: '1.4s'}}>
             <div className="bg-white rounded-lg p-4 shadow-md border border-slate-200">
-              <div className="text-3xl font-bold text-blue-900">2+</div>
+              <div className="text-3xl font-bold text-blue-900">2</div>
               <div className="text-xs text-slate-600 font-medium">Years AI Engineering</div>
             </div>
             <div className="bg-white rounded-lg p-4 shadow-md border border-slate-200">
