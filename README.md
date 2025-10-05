@@ -2,6 +2,14 @@
 
 An intelligent voice-powered interview bot built for the 100x AI Agent Team position. Features speech recognition, AI-powered responses, and an interactive UI for professional interviews.
 
+## Screenshots
+
+### Landing Page
+![Landing Page](./frontend/public/home.png)
+
+### Voice Interview Interface
+![Voice Bot](./frontend/public/bot.png)
+
 ## Features
 
 - **Voice Recognition** - Real-time speech-to-text using Web Speech API
